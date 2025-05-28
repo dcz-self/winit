@@ -82,6 +82,7 @@ changelog entry.
 - `ActivationToken::as_raw` to get a ref to raw token.
 - Each platform now has corresponding `WindowAttributes` struct instead of trait extension.
 - On Wayland, added implementation for `Window::set_window_icon`
+- Add an atomic interface to submit input method changes, accessible through `ImeState`, available for Wayland.
 
 ### Changed
 
