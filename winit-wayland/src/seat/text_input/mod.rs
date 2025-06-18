@@ -24,7 +24,7 @@ impl TextInputState {
         globals: &GlobalList,
         queue_handle: &QueueHandle<WinitState>,
     ) -> Result<Self, BindError> {
-        let text_input_manager = globals.bind(queue_handle, 1..=1, GlobalData)?;
+        let text_input_manager = globals.bind(queue_handle, 1..=2, GlobalData)?;
         Ok(Self { text_input_manager })
     }
 }
@@ -71,6 +71,8 @@ impl Dispatch<ZwpTextInputV3, TextInputData, WinitState> for TextInputState {
                 };
 
                 if let Some(im_state) = window.text_input_state() {
+                    // The next call acquires the mutex again
+                    drop(text_input_data);
                     text_input.set_state(Some(im_state.clone()), false);
                     // The input method doesn't have to reply anything, so a synthetic event
                     // carrying an empty state notifies the application about its presence.
@@ -159,6 +161,7 @@ impl Dispatch<ZwpTextInputV3, TextInputData, WinitState> for TextInputState {
 pub trait ZwpTextInputV3Ext {
     /// Applies the entire state atomically to the input method. It will skip the "enable" request
     /// if `already_enabled` is `true`.
+    /// This may acquire the TextInputDataInner mutex.
     fn set_state(&self, state: Option<ClientState>, already_enabled: bool);
 }
 
@@ -186,6 +189,13 @@ impl ZwpTextInputV3Ext for ZwpTextInputV3 {
             self.disable();
         }
         self.commit();
+        if self.version() >= 2 {
+            let data = self.data::<TextInputData>().unwrap();
+            let data = data.inner.lock().unwrap();
+            if let Some(surface) = data.surface.as_ref() {
+                surface.commit();
+            }
+        }
     }
 }
 
