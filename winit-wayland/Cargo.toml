@@ -40,6 +40,7 @@ wayland-client.workspace = true
 wayland-protocols.workspace = true
 wayland-protocols-plasma.workspace = true
 winit-common = { workspace = true, features = ["xkb", "wayland"] }
+wl-input-method = { version = "0.0.3", git = "https://gitlab.freedesktop.org/dcz/wl-input-method.git", branch = "textinput" }
 
 [package.metadata.docs.rs]
 features = ["dlopen", "serde", "csd-adwaita"]

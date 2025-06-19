@@ -79,7 +79,6 @@ wayland-backend = { version = "0.3.10", default-features = false, features = ["c
 wayland-client = "0.31.10"
 wayland-protocols = { version = "0.32.8", features = ["staging"] }
 wayland-protocols-plasma = { version = "0.3.8", features = ["client"] }
-wl-input-method = { version = "0.0.3", git = "https://gitlab.freedesktop.org/dcz/wl-input-method.git", branch = "textinput" }
 x11-dl = "2.19.1"
 x11rb = { version = "0.13.0", default-features = false }
 xkbcommon-dl = "0.4.2"
