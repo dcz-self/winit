@@ -79,6 +79,7 @@ wayland-backend = { version = "0.3.10", default-features = false, features = ["c
 wayland-client = "0.31.10"
 wayland-protocols = { version = "0.32.8", features = ["staging"] }
 wayland-protocols-plasma = { version = "0.3.8", features = ["client"] }
+wl-input-method = { version = "0.0.3", git = "https://gitlab.freedesktop.org/dcz/wl-input-method.git", branch = "textinput" }
 x11-dl = "2.19.1"
 x11rb = { version = "0.13.0", default-features = false }
 xkbcommon-dl = "0.4.2"
@@ -228,15 +229,3 @@ name = "window"
 
 [[example]]
 name = "child_window"
-
-
-[patch.crates-io]
-wayland-client = { version = "0.31.10", path="../wayland-rs/wayland-client"}
-wayland-cursor = { version = "0.31.10", path="../wayland-rs/wayland-cursor"}
-wayland-egl = { version = "0.32.7", path="../wayland-rs/wayland-egl"}
-wayland-protocols-wlr = { version = "0.3.8", features = ["server"], path="../wayland-rs/wayland-protocols-wlr"}
-wayland-protocols-misc = { version = "0.3.8", features = ["server"], path="../wayland-rs/wayland-protocols-misc"}
-wayland-server = { version = "0.31.9", path="../wayland-rs/wayland-server"}
-wayland-sys = { version = "0.31.6", path="../wayland-rs/wayland-sys"}
-wayland-backend = { version = "0.3.10", path="../wayland-rs/wayland-backend"}
-wayland-protocols = {version = "0.32.8", features = ["unstable", "staging", "server"], path="../wayland-rs/wayland-protocols"}
