@@ -10,7 +10,7 @@ use sctk::reexports::protocols::wp::text_input::zv3::client::zwp_text_input_v3::
     ContentHint, ContentPurpose, Event as TextInputEvent, ZwpTextInputV3,
 };
 use winit_core::event::{Ime, WindowEvent};
-use winit_core::window::{ImePurpose, ImeState};
+use winit_core::window::{ImePurpose, ImeStateChange, ImeUnsupportedCapability};
 
 use crate::state::WinitState;
 
@@ -164,7 +164,7 @@ pub trait ZwpTextInputV3Ext {
 
 impl ZwpTextInputV3Ext for ZwpTextInputV3 {
     fn set_state(&self, state: Option<ClientState>, already_enabled: bool) {
-        if let Some(ClientState { purpose, hint, cursor_area }) = state {
+        if let Some(ClientState { content_type, cursor_area }) = state {
             // text_input.enabled() resets some state on every call in text_input_v3.
             // This might be an abundance of caution, though. We do update the entire state on every
             // call... do we? Things to watch out for: whether the enable event
@@ -172,7 +172,9 @@ impl ZwpTextInputV3Ext for ZwpTextInputV3 {
             if !already_enabled {
                 self.enable();
             }
-            self.set_content_type(hint, purpose);
+            if let Some(ContentType { purpose, hint }) = content_type {
+                self.set_content_type(hint, purpose);
+            }
             if let Some((position, size)) = cursor_area {
                 let (x, y) = (position.x as i32, position.y as i32);
                 let (width, height) = (size.width as i32, size.height as i32);
@@ -215,36 +217,79 @@ struct Preedit {
     cursor_end: Option<usize>,
 }
 
-/// State requested by the application.
-///
-/// This is a version that uses text_input abstractions translated from the ones used in
-/// winit::core::window::ImeState.
-#[derive(Debug, PartialEq, Clone)]
-pub struct ClientState {
+/// Arguments to content_type
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct ContentType {
     /// Text input purpose
     purpose: ContentPurpose,
     hint: ContentHint,
+}
+
+/// State change requested by the application.
+///
+/// This is a version that uses text_input abstractions translated from the ones used in
+/// winit::core::window::ImeStateChange.
+///
+/// Fields that are initially set to None are unsupported capabilities
+/// and trying to set them raises an error.
+#[derive(Debug, PartialEq, Clone, Default)]
+pub struct ClientState {
+    content_type: Option<ContentType>,
     /// The IME cursor area which should not be covered by the input method popup.
     cursor_area: Option<(LogicalPosition<u32>, LogicalSize<u32>)>,
 }
 
-impl ClientState {
-    /// Converts the units from the windowing system into units expected by the Wayland protocol
-    pub fn new(ImeState { purpose, cursor_area, .. }: &ImeState, scale_factor: f64) -> Self {
-        let (hint, purpose) = match purpose {
+impl ClientState {    
+    /// Updates the fields of the state which are present in update_fields.
+    /// If no previous state present, this initializes it.
+    pub fn update(state: Option<Self>, update_fields: &ImeStateChange, scale_factor: f64) -> Result<Self, ImeUnsupportedCapability> {
+        let initialize = state.is_none();
+        let state = state.unwrap_or_default();
+        state.update_inner(update_fields, scale_factor, !initialize)
+    }
+
+    /// Converts the units from the windowing system into units expected by the Wayland protocol. If `check` is `true`, it will fail on attempts to set a value that was not advertised as a capability.
+    fn update_inner(
+        self,
+        ImeStateChange { purpose, cursor_area, .. }: &ImeStateChange, 
+        scale_factor: f64,
+        check: bool,
+    ) -> Result<Self, ImeUnsupportedCapability> {
+        let content_type = purpose.map(|purpose| match purpose {
             ImePurpose::Password => (ContentHint::SensitiveData, ContentPurpose::Password),
             ImePurpose::Terminal => (ContentHint::None, ContentPurpose::Terminal),
             _ => (ContentHint::None, ContentPurpose::Normal),
-        };
+        });
+        let content_type = content_type.map(|(hint, purpose)| ContentType { hint, purpose});
+        
         let cursor_area = cursor_area.map(|(position, size)| {
             let position: LogicalPosition<u32> = position.to_logical(scale_factor);
             let size: LogicalSize<u32> = size.to_logical(scale_factor);
             (position, size)
         });
 
-        Self { hint, purpose, cursor_area }
+        Ok(Self {
+            cursor_area: Self::update_field_by_cap(self.cursor_area, cursor_area, check).map_err(|()| ImeUnsupportedCapability::CURSOR_AREA)?,
+            content_type: Self::update_field_by_cap(self.content_type, content_type, check).map_err(|()| ImeUnsupportedCapability::PURPOSE)?,
+        })
+    }
+    
+    fn update_field_by_cap<T>(cap: Option<T>, value: Option<T>, check: bool) -> Result<Option<T>, ()> {
+        match (cap.is_some(), value.is_some()) {
+            // No such capability, but attempting to set
+            (false, true) => if check {
+                Err(())
+            } else {
+                Ok(value)
+            },
+            // Simple update of value
+            (true, true) => Ok(value),
+            // The capability also serves as the old value
+            (_, false) => Ok(cap),
+        }
     }
 }
+
 
 delegate_dispatch!(WinitState: [ZwpTextInputManagerV3: GlobalData] => TextInputState);
 delegate_dispatch!(WinitState: [ZwpTextInputV3: TextInputData] => TextInputState);

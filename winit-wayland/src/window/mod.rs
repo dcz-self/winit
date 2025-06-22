@@ -20,8 +20,7 @@ use winit_core::event::{Ime, WindowEvent};
 use winit_core::event_loop::AsyncRequestSerial;
 use winit_core::monitor::{Fullscreen, MonitorHandle as CoreMonitorHandle};
 use winit_core::window::{
-    CursorGrabMode, ImeState, ResizeDirection, Theme, UserAttentionType, Window as CoreWindow,
-    WindowAttributes, WindowButtons, WindowId, WindowLevel,
+    CursorGrabMode, ImeStateChange, ImeUnsupportedCapability, ResizeDirection, Theme, UserAttentionType, Window as CoreWindow, WindowAttributes, WindowButtons, WindowId, WindowLevel
 };
 
 use super::event_loop::sink::EventSink;
@@ -76,7 +75,7 @@ pub struct Window {
     window_events_sink: Arc<Mutex<EventSink>>,
 
     /// The state of the input method for the deprecated API
-    ime_state: Mutex<Option<ImeState>>,
+    ime_enabled: AtomicBool,
 }
 
 impl Window {
@@ -224,7 +223,7 @@ impl Window {
             event_loop_awakener,
             window_requests,
             window_events_sink,
-            ime_state: Mutex::new(None),
+            ime_enabled: AtomicBool::new(false),
         })
     }
 
@@ -512,8 +511,7 @@ impl CoreWindow for Window {
     }
 
     #[inline]
-    fn set_ime_state(&self, state: Option<&ImeState>) {
-        *self.ime_state.lock().unwrap() = state.cloned();
+    fn update_ime_state(&self, state: Option<&ImeStateChange>) -> Result<(), ImeUnsupportedCapability>{
         // The Ime::Enabled event is sent under two circumstances:
         // 1. An input method exists and was now allowed
         // 2. No input method exists, then it was allowed, and it appears.
@@ -524,19 +522,22 @@ impl CoreWindow for Window {
         let allowed = state.is_some();
 
         let mut window_state = self.window_state.lock().unwrap();
-        let ime_exists = window_state.set_ime_state(state);
+        let ime_exists = window_state.set_ime_state(state)?;
         let window_state = window_state;
+        
+        self.ime_enabled.store(allowed, Ordering::SeqCst);
 
         if window_state.ime_allowed() != allowed && ime_exists {
             let event = WindowEvent::Ime(if allowed { Ime::Enabled } else { Ime::Disabled });
             self.window_events_sink.lock().unwrap().push_window_event(event, self.window_id);
             self.event_loop_awakener.ping();
         }
+        Ok(())
     }
 
     #[inline]
-    fn get_ime_state(&self) -> Option<ImeState> {
-        self.ime_state.lock().unwrap().clone()
+    fn get_ime_enabled(&self) -> bool {
+        self.ime_enabled.load(Ordering::SeqCst)
     }
 
     fn focus_window(&self) {}

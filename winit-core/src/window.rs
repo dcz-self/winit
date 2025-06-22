@@ -1098,9 +1098,8 @@ pub trait Window: AsAny + Send + Sync + fmt::Debug {
     /// [japanese]: https://support.apple.com/guide/japanese-input-method/use-the-candidate-window-jpim10262/6.3/mac/12.0
     #[deprecated = "use set_ime_state instead"]
     fn set_ime_cursor_area(&self, position: Position, size: Size) {
-        if let Some(state) = self.get_ime_state() {
-            let new_state = state.with_cursor_area(position, size);
-            self.set_ime_state(Some(&new_state));
+        if self.get_ime_enabled() {
+            let _ = self.update_ime_state(Some(&ImeStateChange::default().with_cursor_area(position, size)));
         }
     }
 
@@ -1128,8 +1127,15 @@ pub trait Window: AsAny + Send + Sync + fmt::Debug {
     /// [`KeyboardInput`]: crate::event::WindowEvent::KeyboardInput
     #[deprecated = "use set_ime_state instead"]
     fn set_ime_allowed(&self, allowed: bool) {
-        let new_state = if allowed { Some(ImeState::new()) } else { None };
-        self.set_ime_state(new_state.as_ref())
+        let new_state = if allowed {
+            Some(&ImeStateChange {
+                purpose: Some(ImePurpose::Normal),
+                // WARNING: there's nothing sensible to use here by default. This turns off the cursor_area capability on Wayland, breaking cursor_area support.
+                cursor_area: None,
+                ..ImeStateChange::default()
+            })
+        } else { None };
+        let _ = self.update_ime_state(new_state);
     }
 
     /// Sets the IME purpose for the window using [`ImePurpose`].
@@ -1139,16 +1145,25 @@ pub trait Window: AsAny + Send + Sync + fmt::Debug {
     /// - **iOS / Android / Web / Windows / X11 / macOS / Orbital:** Unsupported.
     #[deprecated = "use set_ime_state instead"]
     fn set_ime_purpose(&self, purpose: ImePurpose) {
-        if let Some(state) = self.get_ime_state() {
-            let new_state = state.with_purpose(purpose);
-            self.set_ime_state(Some(&new_state));
+        if self.get_ime_enabled() {
+            let _ = self.update_ime_state(Some(&ImeStateChange {
+                purpose: Some(purpose),
+                ..ImeStateChange::default()
+            }));
         }
     }
 
-    /// Atomically sets the IME state for the window using [`ImeState`].
+    /// Atomically updates the IME state for the window using [`ImeStateChange`].
     ///
-    /// If the state is Some, this requests an input method, and the window begins to receive input
+    /// If `state` is Some, then this enables an input method, and the window begins to receive input
     /// method events.
+    /// In that case, `state` must carry the complete initial state.
+    /// The platform backend may remember the properties set in the initial state
+    /// for the purpose of determining supported properties.
+    ///
+    /// Subsequent calls with `state` set to Some update the state with 
+    /// provided properties. If a property not part of the initial state is set in the update,
+    /// the platform backend may return the `ImeUnsupportedCapability` error.
     ///
     /// If the state is None, this disables the input method, and the window stops receiving input
     /// method events.
@@ -1163,14 +1178,45 @@ pub trait Window: AsAny + Send + Sync + fmt::Debug {
     ///
     /// IME is **not** enabled by default.
     ///
+    /// Usage example:
+    ///
+    /// ```no_run
+    /// # use winit_core::window::{Window, ImePurpose, ImeStateChange};
+    /// # fn scope(window: &dyn Window, cursor_area: (Position, Size)) {
+    /// // Clear previous state by switching off IME
+    /// window.update_ime_state(None).expect("Cannot fail");
+    ///
+    /// // Set capabilities by sending a complete initial state
+    /// window.update_ime_state(
+    ///     ImeStateChange::default().with_purpose(ImePurpose::Normal),
+    /// ).expect("Cannot fail");
+    ///
+    /// // Update the current state
+    /// window.update_ime_state(
+    ///     ImeStateChange::default().with_purpose(ImePurpose::Normal),
+    /// ).expect("Shouldn't fail - we intially set the purpose");
+    ///
+    /// // Update the current state
+    /// window.update_ime_state(
+    ///     ImeStateChange::default().with_cursor_area(cursor_area),
+    /// ).expect("Can fail - we didn't submit a cursor position initially");
+    ///
+    /// // Switch off IME
+    /// window.update_ime_state(None).expect("Cannot fail");
+    /// # }
+    /// ``` 
+    ///
     /// ## Platform-specific
     ///
     /// - **iOS / Android / Web / Windows / X11 / macOS / Orbital:** Unsupported.
-    fn set_ime_state(&self, _state: Option<&ImeState>) {}
+    fn update_ime_state(&self, state: Option<&ImeStateChange>) -> Result<(), ImeUnsupportedCapability> {
+        let _ = state;
+        Ok(())
+    }
 
-    /// Returns the current IME state, if the set_ime_state API is supported.
-    fn get_ime_state(&self) -> Option<ImeState> {
-        None
+    /// Returns true if IME has been enabled
+    fn get_ime_enabled(&self) -> bool {
+        false
     }
 
     /// Brings the window to the front and sets input focus. Has no effect if the window is
@@ -1574,35 +1620,34 @@ impl Default for ImePurpose {
     }
 }
 
-/// The IME state for use in [`Window::set_ime_state`].
+bitflags::bitflags! {
+    /// The user didn't set a property in the enabling call but tried to set it in an update.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+    pub struct ImeUnsupportedCapability: u32 {
+        const PURPOSE = 0b1;
+        const CURSOR_AREA = 0b10;
+    }
+}
+
+/// The IME state change for use in [`Window::update_ime_state`].
 ///
-/// This applies an IME state change all at once.
+/// This applies multiple IME state properties all at once.
+/// Fields set to None are not updated.
 ///
 /// ## Platform-specific
 ///
 /// - **iOS / Android / Web / Windows / X11 / macOS / Orbital:** Unsupported.
 #[non_exhaustive]
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Default)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct ImeState {
+pub struct ImeStateChange {
     /// Text input purpose
-    pub purpose: ImePurpose,
+    pub purpose: Option<ImePurpose>,
     /// The IME cursor area which should not be covered by the input method popup.
     pub cursor_area: Option<(Position, Size)>,
 }
 
-impl Default for ImeState {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl ImeState {
-    /// Creates a new input method state.
-    pub fn new() -> Self {
-        Self { purpose: ImePurpose::Normal, cursor_area: None }
-    }
-
+impl ImeStateChange {
     /// Sets the purpose hint of the current text input
     ///
     /// ## Platform-specific
@@ -1610,7 +1655,7 @@ impl ImeState {
     /// On Wayland, the content purpose be set from the first request.
     /// Otherwise, the input method will consider the functionality unsupported.
     pub fn with_purpose(self, purpose: ImePurpose) -> Self {
-        Self { purpose, ..self }
+        Self { purpose: Some(purpose), ..self }
     }
 
     /// Sets the IME cursor editing area.
@@ -1632,16 +1677,16 @@ impl ImeState {
     ///
     /// ```no_run
     /// # use dpi::{LogicalPosition, PhysicalPosition, LogicalSize, PhysicalSize};
-    /// # use winit_core::window::ImeState;
-    /// # fn scope(ime_state: ImeState) {
+    /// # use winit_core::window::ImeStateChange;
+    /// # fn scope(ime_update: ImeStateChange) {
     /// // Specify the position in logical dimensions like this:
-    /// let ime_state = ime_state.with_cursor_area(
+    /// let ime_update = ime_update.with_cursor_area(
     ///     LogicalPosition::new(400.0, 200.0).into(),
     ///     LogicalSize::new(100, 100).into(),
     /// );
     ///
     /// // Or specify the position in physical dimensions like this:
-    /// let ime_state = ime_state.with_cursor_area(
+    /// let ime_update = ime_update.with_cursor_area(
     ///     PhysicalPosition::new(400, 200).into(),
     ///     PhysicalSize::new(100, 100).into(),
     /// );

@@ -5,6 +5,7 @@ use std::num::NonZeroU32;
 use std::ops::Deref;
 use std::os::raw::*;
 use std::path::Path;
+use std::sync::atomic::{self, AtomicBool};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::{cmp, env};
 
@@ -20,7 +21,7 @@ use winit_core::monitor::{
     Fullscreen, MonitorHandle as CoreMonitorHandle, MonitorHandleProvider, VideoMode,
 };
 use winit_core::window::{
-    CursorGrabMode, ImePurpose, ImeState, ResizeDirection, Theme, UserAttentionType,
+    CursorGrabMode, ImePurpose, ImeStateChange, ImeUnsupportedCapability, ResizeDirection, Theme, UserAttentionType,
     Window as CoreWindow, WindowAttributes, WindowButtons, WindowId, WindowLevel,
 };
 use x11rb::connection::{Connection, RequestConnection};
@@ -210,12 +211,13 @@ impl CoreWindow for Window {
         self.0.set_window_icon(icon)
     }
 
-    fn set_ime_state(&self, state: Option<&ImeState>) {
-        self.0.set_ime_state(state);
+    fn update_ime_state(&self, state: Option<&ImeStateChange>) -> Result<(), ImeUnsupportedCapability> {
+        self.0.update_ime_state(state);
+        Ok(())
     }
 
-    fn get_ime_state(&self) -> Option<ImeState> {
-        self.0.get_ime_state()
+    fn get_ime_enabled(&self) -> bool {
+        self.0.get_ime_enabled()
     }
 
     fn focus_window(&self) {
@@ -424,7 +426,7 @@ pub struct UnownedWindow {
     cursor_visible: Mutex<bool>,
     ime_sender: Mutex<ImeSender>,
     /// Cached state for deprecated IME API.
-    ime_state: Mutex<Option<ImeState>>,
+    ime_enabled: AtomicBool,
     pub shared_state: Mutex<SharedState>,
     redraw_sender: WakeSender<WindowId>,
     activation_sender: WakeSender<ActivationItem>,
@@ -650,7 +652,7 @@ impl UnownedWindow {
             cursor_grabbed_mode: Mutex::new(CursorGrabMode::None),
             cursor_visible: Mutex::new(true),
             ime_sender: Mutex::new(event_loop.ime_sender.clone()),
-            ime_state: Mutex::new(None),
+            ime_enabled: AtomicBool::new(false),
             shared_state: SharedState::new(guessed_monitor, &window_attrs),
             redraw_sender: event_loop.redraw_sender.clone(),
             activation_sender: event_loop.activation_sender.clone(),
@@ -2083,8 +2085,8 @@ impl UnownedWindow {
     pub fn set_ime_purpose(&self, _purpose: ImePurpose) {}
 
     #[inline]
-    pub fn set_ime_state(&self, state: Option<&ImeState>) -> bool {
-        *self.ime_state.lock().unwrap() = state.cloned();
+    pub fn update_ime_state(&self, state: Option<&ImeStateChange>) -> bool {
+        self.ime_enabled.store(state.is_some(), atomic::Ordering::SeqCst);
         if let Some(state) = state {
             // FIXME: Not sure if this can be called every time or may only be called once
             self.set_ime_allowed(true);
@@ -2101,8 +2103,8 @@ impl UnownedWindow {
     }
 
     #[inline]
-    pub fn get_ime_state(&self) -> Option<ImeState> {
-        self.ime_state.lock().unwrap().clone()
+    pub fn get_ime_enabled(&self) -> bool {
+        self.ime_enabled.load(atomic::Ordering::SeqCst)
     }
 
     #[inline]
