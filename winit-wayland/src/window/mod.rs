@@ -20,7 +20,9 @@ use winit_core::event::{Ime, WindowEvent};
 use winit_core::event_loop::AsyncRequestSerial;
 use winit_core::monitor::{Fullscreen, MonitorHandle as CoreMonitorHandle};
 use winit_core::window::{
-    CursorGrabMode, ImeStateChange, ImeUnsupportedCapability, ResizeDirection, Theme, UserAttentionType, Window as CoreWindow, WindowAttributes, WindowButtons, WindowId, WindowLevel
+    CursorGrabMode, ImeStateChange, ImeUnsupportedCapability, ResizeDirection, Theme,
+    UserAttentionType, Window as CoreWindow, WindowAttributes, WindowButtons, WindowId,
+    WindowLevel,
 };
 
 use super::event_loop::sink::EventSink;
@@ -511,7 +513,10 @@ impl CoreWindow for Window {
     }
 
     #[inline]
-    fn update_ime_state(&self, state: Option<&ImeStateChange>) -> Result<(), ImeUnsupportedCapability>{
+    fn update_ime_state(
+        &self,
+        state: Option<&ImeStateChange>,
+    ) -> Result<(), ImeUnsupportedCapability> {
         // The Ime::Enabled event is sent under two circumstances:
         // 1. An input method exists and was now allowed
         // 2. No input method exists, then it was allowed, and it appears.
@@ -524,7 +529,7 @@ impl CoreWindow for Window {
         let mut window_state = self.window_state.lock().unwrap();
         let ime_exists = window_state.set_ime_state(state)?;
         let window_state = window_state;
-        
+
         self.ime_enabled.store(allowed, Ordering::SeqCst);
 
         if window_state.ime_allowed() != allowed && ime_exists {

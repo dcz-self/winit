@@ -716,7 +716,9 @@ impl WindowState {
                     .with_cursor_area(cursor_pos, IME_CURSOR_SIZE.into()),
             )
         };
-        self.window.update_ime_state(ime_update.as_ref()).expect("A capability was not initially declared");
+        self.window
+            .update_ime_state(ime_update.as_ref())
+            .expect("A capability was not initially declared");
         self.ime_state = ime_update.is_some();
     }
 
@@ -731,9 +733,11 @@ impl WindowState {
         if self.ime_state {
             let ime_update = Some(
                 ImeStateChange::default()
-                    .with_cursor_area(position.into(), PhysicalSize::new(20, 20).into())
+                    .with_cursor_area(position.into(), PhysicalSize::new(20, 20).into()),
             );
-            self.window.update_ime_state(ime_update.as_ref()).expect("A capability was not initially declared");
+            self.window
+                .update_ime_state(ime_update.as_ref())
+                .expect("A capability was not initially declared");
         }
     }
 

@@ -32,7 +32,9 @@ use wayland_protocols::xdg::toplevel_icon::v1::client::xdg_toplevel_icon_manager
 use wayland_protocols_plasma::blur::client::org_kde_kwin_blur::OrgKdeKwinBlur;
 use winit_core::cursor::{CursorIcon, CustomCursor as CoreCustomCursor};
 use winit_core::error::{NotSupportedError, RequestError};
-use winit_core::window::{CursorGrabMode, ImeStateChange, ImeUnsupportedCapability, ResizeDirection, Theme, WindowId};
+use winit_core::window::{
+    CursorGrabMode, ImeStateChange, ImeUnsupportedCapability, ResizeDirection, Theme, WindowId,
+};
 
 use crate::event_loop::OwnedDisplayHandle;
 use crate::logical_to_physical_rounded;
@@ -994,8 +996,11 @@ impl WindowState {
     /// Otherwise, fields from `update` get set.
     ///
     /// Returns `true` if an input method already exists (received .enter without .leave).
-    pub fn set_ime_state(&mut self, update: Option<&ImeStateChange>) -> Result<bool, ImeUnsupportedCapability> {
-        let state = match update{
+    pub fn set_ime_state(
+        &mut self,
+        update: Option<&ImeStateChange>,
+    ) -> Result<bool, ImeUnsupportedCapability> {
+        let state = match update {
             Some(update) => Some(TextInputClientState::update(
                 self.text_input_state.clone(),
                 update,

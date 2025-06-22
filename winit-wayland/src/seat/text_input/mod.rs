@@ -239,19 +239,25 @@ pub struct ClientState {
     cursor_area: Option<(LogicalPosition<u32>, LogicalSize<u32>)>,
 }
 
-impl ClientState {    
+impl ClientState {
     /// Updates the fields of the state which are present in update_fields.
     /// If no previous state present, this initializes it.
-    pub fn update(state: Option<Self>, update_fields: &ImeStateChange, scale_factor: f64) -> Result<Self, ImeUnsupportedCapability> {
+    pub fn update(
+        state: Option<Self>,
+        update_fields: &ImeStateChange,
+        scale_factor: f64,
+    ) -> Result<Self, ImeUnsupportedCapability> {
         let initialize = state.is_none();
         let state = state.unwrap_or_default();
         state.update_inner(update_fields, scale_factor, !initialize)
     }
 
-    /// Converts the units from the windowing system into units expected by the Wayland protocol. If `check` is `true`, it will fail on attempts to set a value that was not advertised as a capability.
+    /// Converts the units from the windowing system into units expected by the Wayland protocol. If
+    /// `check` is `true`, it will fail on attempts to set a value that was not advertised as a
+    /// capability.
     fn update_inner(
         self,
-        ImeStateChange { purpose, cursor_area, .. }: &ImeStateChange, 
+        ImeStateChange { purpose, cursor_area, .. }: &ImeStateChange,
         scale_factor: f64,
         check: bool,
     ) -> Result<Self, ImeUnsupportedCapability> {
@@ -260,8 +266,8 @@ impl ClientState {
             ImePurpose::Terminal => (ContentHint::None, ContentPurpose::Terminal),
             _ => (ContentHint::None, ContentPurpose::Normal),
         });
-        let content_type = content_type.map(|(hint, purpose)| ContentType { hint, purpose});
-        
+        let content_type = content_type.map(|(hint, purpose)| ContentType { hint, purpose });
+
         let cursor_area = cursor_area.map(|(position, size)| {
             let position: LogicalPosition<u32> = position.to_logical(scale_factor);
             let size: LogicalSize<u32> = size.to_logical(scale_factor);
@@ -269,18 +275,26 @@ impl ClientState {
         });
 
         Ok(Self {
-            cursor_area: Self::update_field_by_cap(self.cursor_area, cursor_area, check).map_err(|()| ImeUnsupportedCapability::CURSOR_AREA)?,
-            content_type: Self::update_field_by_cap(self.content_type, content_type, check).map_err(|()| ImeUnsupportedCapability::PURPOSE)?,
+            cursor_area: Self::update_field_by_cap(self.cursor_area, cursor_area, check)
+                .map_err(|()| ImeUnsupportedCapability::CURSOR_AREA)?,
+            content_type: Self::update_field_by_cap(self.content_type, content_type, check)
+                .map_err(|()| ImeUnsupportedCapability::PURPOSE)?,
         })
     }
-    
-    fn update_field_by_cap<T>(cap: Option<T>, value: Option<T>, check: bool) -> Result<Option<T>, ()> {
+
+    fn update_field_by_cap<T>(
+        cap: Option<T>,
+        value: Option<T>,
+        check: bool,
+    ) -> Result<Option<T>, ()> {
         match (cap.is_some(), value.is_some()) {
             // No such capability, but attempting to set
-            (false, true) => if check {
-                Err(())
-            } else {
-                Ok(value)
+            (false, true) => {
+                if check {
+                    Err(())
+                } else {
+                    Ok(value)
+                }
             },
             // Simple update of value
             (true, true) => Ok(value),
@@ -289,7 +303,6 @@ impl ClientState {
         }
     }
 }
-
 
 delegate_dispatch!(WinitState: [ZwpTextInputManagerV3: GlobalData] => TextInputState);
 delegate_dispatch!(WinitState: [ZwpTextInputV3: TextInputData] => TextInputState);

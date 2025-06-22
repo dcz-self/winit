@@ -21,8 +21,9 @@ use winit_core::monitor::{
     Fullscreen, MonitorHandle as CoreMonitorHandle, MonitorHandleProvider, VideoMode,
 };
 use winit_core::window::{
-    CursorGrabMode, ImePurpose, ImeStateChange, ImeUnsupportedCapability, ResizeDirection, Theme, UserAttentionType,
-    Window as CoreWindow, WindowAttributes, WindowButtons, WindowId, WindowLevel,
+    CursorGrabMode, ImePurpose, ImeStateChange, ImeUnsupportedCapability, ResizeDirection, Theme,
+    UserAttentionType, Window as CoreWindow, WindowAttributes, WindowButtons, WindowId,
+    WindowLevel,
 };
 use x11rb::connection::{Connection, RequestConnection};
 use x11rb::properties::{WmHints, WmSizeHints, WmSizeHintsSpecification};
@@ -211,7 +212,10 @@ impl CoreWindow for Window {
         self.0.set_window_icon(icon)
     }
 
-    fn update_ime_state(&self, state: Option<&ImeStateChange>) -> Result<(), ImeUnsupportedCapability> {
+    fn update_ime_state(
+        &self,
+        state: Option<&ImeStateChange>,
+    ) -> Result<(), ImeUnsupportedCapability> {
         self.0.update_ime_state(state);
         Ok(())
     }

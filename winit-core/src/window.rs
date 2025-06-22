@@ -1099,7 +1099,9 @@ pub trait Window: AsAny + Send + Sync + fmt::Debug {
     #[deprecated = "use set_ime_state instead"]
     fn set_ime_cursor_area(&self, position: Position, size: Size) {
         if self.get_ime_enabled() {
-            let _ = self.update_ime_state(Some(&ImeStateChange::default().with_cursor_area(position, size)));
+            let _ = self.update_ime_state(Some(
+                &ImeStateChange::default().with_cursor_area(position, size),
+            ));
         }
     }
 
@@ -1130,11 +1132,14 @@ pub trait Window: AsAny + Send + Sync + fmt::Debug {
         let new_state = if allowed {
             Some(&ImeStateChange {
                 purpose: Some(ImePurpose::Normal),
-                // WARNING: there's nothing sensible to use here by default. This turns off the cursor_area capability on Wayland, breaking cursor_area support.
+                // WARNING: there's nothing sensible to use here by default. This turns off the
+                // cursor_area capability on Wayland, breaking cursor_area support.
                 cursor_area: None,
                 ..ImeStateChange::default()
             })
-        } else { None };
+        } else {
+            None
+        };
         let _ = self.update_ime_state(new_state);
     }
 
@@ -1155,13 +1160,13 @@ pub trait Window: AsAny + Send + Sync + fmt::Debug {
 
     /// Atomically updates the IME state for the window using [`ImeStateChange`].
     ///
-    /// If `state` is Some, then this enables an input method, and the window begins to receive input
-    /// method events.
+    /// If `state` is Some, then this enables an input method, and the window begins to receive
+    /// input method events.
     /// In that case, `state` must carry the complete initial state.
     /// The platform backend may remember the properties set in the initial state
     /// for the purpose of determining supported properties.
     ///
-    /// Subsequent calls with `state` set to Some update the state with 
+    /// Subsequent calls with `state` set to Some update the state with
     /// provided properties. If a property not part of the initial state is set in the update,
     /// the platform backend may return the `ImeUnsupportedCapability` error.
     ///
@@ -1187,29 +1192,32 @@ pub trait Window: AsAny + Send + Sync + fmt::Debug {
     /// window.update_ime_state(None).expect("Cannot fail");
     ///
     /// // Set capabilities by sending a complete initial state
-    /// window.update_ime_state(
-    ///     ImeStateChange::default().with_purpose(ImePurpose::Normal),
-    /// ).expect("Cannot fail");
+    /// window
+    ///     .update_ime_state(ImeStateChange::default().with_purpose(ImePurpose::Normal))
+    ///     .expect("Cannot fail");
     ///
     /// // Update the current state
-    /// window.update_ime_state(
-    ///     ImeStateChange::default().with_purpose(ImePurpose::Normal),
-    /// ).expect("Shouldn't fail - we intially set the purpose");
+    /// window
+    ///     .update_ime_state(ImeStateChange::default().with_purpose(ImePurpose::Normal))
+    ///     .expect("Shouldn't fail - we intially set the purpose");
     ///
     /// // Update the current state
-    /// window.update_ime_state(
-    ///     ImeStateChange::default().with_cursor_area(cursor_area),
-    /// ).expect("Can fail - we didn't submit a cursor position initially");
+    /// window
+    ///     .update_ime_state(ImeStateChange::default().with_cursor_area(cursor_area))
+    ///     .expect("Can fail - we didn't submit a cursor position initially");
     ///
     /// // Switch off IME
     /// window.update_ime_state(None).expect("Cannot fail");
     /// # }
-    /// ``` 
+    /// ```
     ///
     /// ## Platform-specific
     ///
     /// - **iOS / Android / Web / Windows / X11 / macOS / Orbital:** Unsupported.
-    fn update_ime_state(&self, state: Option<&ImeStateChange>) -> Result<(), ImeUnsupportedCapability> {
+    fn update_ime_state(
+        &self,
+        state: Option<&ImeStateChange>,
+    ) -> Result<(), ImeUnsupportedCapability> {
         let _ = state;
         Ok(())
     }
