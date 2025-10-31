@@ -17,7 +17,6 @@ use sctk::reexports::csd_frame::{
     DecorationsFrame, FrameAction, FrameClick, ResizeEdge, WindowState as XdgWindowState,
 };
 use sctk::reexports::protocols::wp::fractional_scale::v1::client::wp_fractional_scale_v1::WpFractionalScaleV1;
-use sctk::reexports::protocols::wp::text_input::zv3::client::zwp_text_input_v3::ZwpTextInputV3;
 use sctk::reexports::protocols::wp::viewporter::client::wp_viewport::WpViewport;
 use sctk::reexports::protocols::xdg::shell::client::xdg_toplevel::ResizeEdge as XdgResizeEdge;
 use sctk::seat::pointer::{PointerDataExt, ThemedPointer};
@@ -39,8 +38,7 @@ use winit_core::window::{
 use crate::event_loop::OwnedDisplayHandle;
 use crate::logical_to_physical_rounded;
 use crate::seat::{
-    PointerConstraintsState, TextInputClientState, WinitPointerData, WinitPointerDataExt,
-    ZwpTextInputV3Ext,
+    PointerConstraintsState, TextInput, TextInputClientState, TextInputRef, WinitPointerData, WinitPointerDataExt
 };
 use crate::state::{WindowCompositorUpdate, WinitState};
 use crate::types::cursor::{CustomCursor, SelectedCursor, WaylandCustomCursor};
@@ -123,7 +121,7 @@ pub struct WindowState {
     text_input_state: Option<TextInputClientState>,
 
     /// The text inputs observed on the window.
-    text_inputs: Vec<ZwpTextInputV3>,
+    text_inputs: Vec<TextInput>,
 
     /// The surface size of the window, as in without client side decorations.
     size: LogicalSize<u32>,
@@ -1151,16 +1149,16 @@ impl WindowState {
 
     /// Register text input on the top-level.
     #[inline]
-    pub fn text_input_entered(&mut self, text_input: &ZwpTextInputV3) {
-        if !self.text_inputs.iter().any(|t| t == text_input) {
-            self.text_inputs.push(text_input.clone());
+    pub fn text_input_entered(&mut self, text_input: TextInputRef<'_>) {
+        if !self.text_inputs.iter().any(|t| *t == text_input) {
+            self.text_inputs.push(text_input.into_owned());
         }
     }
 
     /// The text input left the top-level.
     #[inline]
-    pub fn text_input_left(&mut self, text_input: &ZwpTextInputV3) {
-        if let Some(position) = self.text_inputs.iter().position(|t| t == text_input) {
+    pub fn text_input_left(&mut self, text_input: TextInputRef<'_>) {
+        if let Some(position) = self.text_inputs.iter().position(|t| *t == text_input) {
             self.text_inputs.remove(position);
         }
     }

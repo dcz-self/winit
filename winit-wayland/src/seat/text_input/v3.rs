@@ -80,7 +80,7 @@ impl Dispatch<ZwpTextInputV3, TextInputData, WinitState> for TextInputState {
                     state.events_sink.push_window_event(WindowEvent::Ime(Ime::Enabled), window_id);
                 }
 
-                window.text_input_entered(text_input);
+                window.text_input_entered(text_input.into());
             },
             TextInputEvent::Leave { surface } => {
                 text_input_data.surface = None;
@@ -99,7 +99,7 @@ impl Dispatch<ZwpTextInputV3, TextInputData, WinitState> for TextInputState {
                     None => return,
                 };
 
-                window.text_input_left(text_input);
+                window.text_input_left(text_input.into());
 
                 state.events_sink.push_window_event(WindowEvent::Ime(Ime::Disabled), window_id);
             },
