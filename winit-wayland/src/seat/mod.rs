@@ -8,7 +8,6 @@ use sctk::reexports::client::protocol::wl_seat::WlSeat;
 use sctk::reexports::client::protocol::wl_touch::WlTouch;
 use sctk::reexports::client::{Connection, Proxy, QueueHandle};
 use sctk::reexports::protocols::wp::relative_pointer::zv1::client::zwp_relative_pointer_v1::ZwpRelativePointerV1;
-use sctk::reexports::protocols::wp::text_input::zv3::client::zwp_text_input_v3::ZwpTextInputV3;
 use sctk::seat::pointer::{ThemeSpec, ThemedPointer};
 use sctk::seat::{Capability as SeatCapability, SeatHandler, SeatState};
 use tracing::warn;
@@ -28,8 +27,7 @@ use keyboard::{KeyboardData, KeyboardState};
 pub use pointer::pointer_gesture::{PointerGestureData, PointerGesturesState};
 pub use pointer::relative_pointer::RelativePointerState;
 pub use pointer::{PointerConstraintsState, WinitPointerData, WinitPointerDataExt};
-use text_input::TextInputData;
-pub use text_input::{ClientState as TextInputClientState, TextInputState};
+pub use text_input::{ClientState as TextInputClientState, TextInput, TextInputState};
 use touch::TouchPoint;
 
 pub(crate) use crate::seat::text_input::ZwpTextInputV3Ext;
@@ -49,7 +47,7 @@ pub struct WinitSeatState {
     first_touch_id: Option<i32>,
 
     /// The text input bound on the seat.
-    text_input: Option<Arc<ZwpTextInputV3>>,
+    text_input: Option<Arc<TextInput>>,
 
     /// The tablet input bound on the seat.
     tablet: Option<Arc<ZwpTabletSeatV2>>,
@@ -157,7 +155,6 @@ impl SeatHandler for WinitState {
             seat_state.text_input = Some(Arc::new(text_input_state.get_text_input(
                 &seat,
                 queue_handle,
-                TextInputData::default(),
             )));
         }
 
