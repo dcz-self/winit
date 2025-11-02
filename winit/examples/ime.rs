@@ -9,7 +9,7 @@ use std::cmp;
 use std::error::Error;
 
 use dpi::{LogicalPosition, PhysicalSize};
-use tracing::{error, info};
+use tracing::{error, info, warn};
 use winit::application::ApplicationHandler;
 use winit::event::{Ime, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, EventLoop};
@@ -41,7 +41,7 @@ struct TextInputState {
     ime_enabled: bool,
     /// The contents of the emulated text field for IME purposes (not displayed).
     /// (text, cursor position in bytes).
-    contents: String,
+    contents: (String, usize),
     /// The purpose of the contents the emulated text field expects
     purpose: ImePurpose,
     /// The behaviour hints for the IME regarding the emulated text field
@@ -50,19 +50,51 @@ struct TextInputState {
 
 impl TextInputState {
     fn text_and_cursor(&self) -> (&str, usize) {
-        (&self.contents, self.contents.len())
+        (&self.contents.0, self.contents.1)
+    }
+    
+    /// Adds text in the current cursor position and move cursor
+    fn add_text(&mut self, text: &str) {
+        let (field, cursor) = &self.contents;
+        // cursor must already be on char boundary
+        let field = format!("{}{}{}", &field[..*cursor], text, &field[*cursor..]);
+        let cursor = cursor + text.len();
+        self.contents = (field, cursor);
     }
 
-    fn append_text(&mut self, text: &str) {
-        self.contents.push_str(text);
+    /// Deletes text, assuming that the cursor is within the deleted range.
+    fn delete_text(&mut self, delete_start: usize, delete_end: usize) {
+        let (field, _) = &self.contents;
+        let new_text = format!("{}{}", &field[..delete_start], &field[delete_end..]);
+        self.contents = (new_text, delete_start);
     }
 
-    fn set_text(&mut self, text: String) {
-        self.contents = text;
+    fn backspace(&mut self) {
+        let (field, cursor) = &self.contents;
+        let text_end = &field[*cursor..];
+        let cursor = field[..*cursor].char_indices().next_back().map(|c| c.0).unwrap_or(*cursor);
+        self.contents = (format!("{}{}", &field[..cursor], text_end), cursor);
     }
-
-    fn pop(&mut self) {
-        self.contents.pop();
+    
+    fn delete(&mut self) {
+        let (field, cursor) = &self.contents;
+        let text_start = &field[..*cursor];
+        let cursor = field[*cursor..].char_indices().next().map(|c| c.0).unwrap_or(*cursor);
+        self.contents = (format!("{}{}", text_start, &field[cursor..]), cursor);
+    }
+    
+    fn move_cursor(&mut self, cursor_offset: i32) {
+        let (field, cursor) = &self.contents;
+        let cursor = cursor.checked_add_signed(cursor_offset as _);
+        if let Some(cursor) = cursor {
+            if cursor < field.len() {
+                self.contents.1 = cursor;
+            } else {
+                warn!("IME requested a move beyond the end, ignoring.");
+            }
+        } else {
+            warn!("IME requested a move before the beginning, ignoring.");
+        }
     }
 }
 
@@ -196,12 +228,16 @@ impl App {
                 info!("text input IME hint now {:?}", self.input_state.hint);
             },
             Key::Named(NamedKey::Backspace) => {
-                self.input_state.pop();
+                self.input_state.backspace();
+                self.print_input_state();
+            },
+            Key::Named(NamedKey::Delete) => {
+                self.input_state.backspace();
                 self.print_input_state();
             },
             _ => {
                 if let Some(text) = event.text {
-                    self.input_state.append_text(&text);
+                    self.input_state.add_text(&text);
                     if self.input_state.ime_enabled {
                         self.window()
                             .request_ime_update(ImeRequest::Update(self.get_ime_update()))
@@ -219,7 +255,7 @@ impl App {
             Ime::Enabled => info!("IME enabled for Window={:?}", window.id()),
             Ime::Preedit(text, caret_pos) => info!("Preedit: {text}, with caret at {caret_pos:?}"),
             Ime::Commit(text) => {
-                self.input_state.append_text(&text);
+                self.input_state.add_text(&text);
                 let request_data = self.get_ime_update();
                 window.request_ime_update(ImeRequest::Update(request_data)).unwrap();
                 self.print_input_state();
@@ -234,16 +270,18 @@ impl App {
                 let delete_start = cursor.saturating_sub(before_bytes);
                 let delete_end = cmp::min(cursor.saturating_add(after_bytes), text.len());
                 if text.is_char_boundary(delete_start) && text.is_char_boundary(delete_end) {
-                    let new_text = {
-                        let mut t = String::from(&text[..delete_start]);
-                        t.push_str(&text[delete_end..]);
-                        t
-                    };
-                    self.input_state.set_text(new_text);
+                    self.input_state.delete_text(delete_start, delete_end);
                     info!("IME deleted bytes: {before_bytes}, {after_bytes}");
                     self.print_input_state();
                 } else {
                     error!("Buggy IME tried to delete with indices not on char boundary.");
+                }
+            },
+            Ime::MoveCursor { anchor, cursor } => {
+                if anchor != cursor {
+                    info!("Selections unsupported in this demo, ignoring");
+                } else {
+                    self.input_state.move_cursor(cursor);
                 }
             },
             Ime::Disabled => info!("IME disabled for Window={:?}", window.id()),

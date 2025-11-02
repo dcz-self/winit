@@ -978,6 +978,20 @@ pub enum Ime {
         after_bytes: usize,
     },
 
+    /// Select a new text span.
+    ///
+    /// The event is equivalent to dragging the mouse pointer to select text.
+    ///
+    /// This event ignores the pre-edit text as if it wasn't there.
+    ///
+    /// The positions are byte-wise indexed relative to initial cursor, assuming UTF-8.
+    MoveCursor {
+        /// The beginning of drag, one end of selection.
+        anchor: i32,
+        /// The end of drag, with the other side of selection and the new cursor position.
+        cursor: i32,
+    },
+    
     /// Notifies when the IME was disabled.
     ///
     /// After receiving this event you won't get any more [`Preedit`][Self::Preedit] or

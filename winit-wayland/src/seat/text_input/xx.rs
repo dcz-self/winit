@@ -7,9 +7,10 @@ use sctk::reexports::client::protocol::wl_surface::WlSurface;
 use sctk::reexports::client::{Connection, Dispatch, Proxy, QueueHandle, delegate_dispatch};
 use sctk::reexports::protocols_experimental::text_input::v3::client::xx_text_input_manager_v3::XxTextInputManagerV3;
 use sctk::reexports::protocols_experimental::text_input::v3::client::xx_text_input_v3::{
-    ContentHint, ContentPurpose, Event as TextInputEvent, XxTextInputV3,
+    Action, ContentHint, ContentPurpose, Event as TextInputEvent, XxTextInputV3
 };
 use tracing::warn;
+use wayland_client::WEnum;
 use winit_core::event::{Ime, WindowEvent};
 use winit_core::window::{
     ImeCapabilities, ImeHint, ImePurpose, ImeSurroundingText,
@@ -125,6 +126,19 @@ impl Dispatch<XxTextInputV3, TextInputData, WinitState> for TextInputState {
                     after: after_length as usize,
                 });
             },
+            TextInputEvent::MoveCursor { cursor, anchor } => {
+                text_input_data.pending_move = Some(MoveCursor { cursor, anchor});
+            },
+            TextInputEvent::PerformAction { action } => {
+                text_input_data.pending_action = match action {
+                    WEnum::Value(action) => Some(action),
+                    WEnum::Unknown(v) => {
+                        // Honor that input method intended to overwrite already enqueued action, even if we don't know what was coming instead
+                        warn!("Received request to perform unknown action {v}. Performing nothing instead.");
+                        None
+                    }
+                };
+            },
             TextInputEvent::Done { .. } => {
                 let window_id = match text_input_data.surface.as_ref() {
                     Some(surface) => crate::make_wid(surface),
@@ -138,17 +152,22 @@ impl Dispatch<XxTextInputV3, TextInputData, WinitState> for TextInputState {
                     }
                 };
 
-                // The events are sent to the user separately, so
+                // The events are sent to the user individually, so
                 // CAUTION: events must always arrive in the order compatible with the application
                 // order specified by the text-input-v3 protocol:
                 //
-                // As of version 1:
+                // As of version 2 (experimental):
+                                
                 // 1. Replace existing preedit string with the cursor.
                 // 2. Delete requested surrounding text.
                 // 3. Insert commit string with the cursor at its end.
-                // 4. Calculate surrounding text to send.
-                // 5. Insert new preedit text in cursor position.
-                // 6. Place cursor inside preedit text.
+                // 4. Move the cursor and selection.
+                // 5. Calculate surrounding text to send.
+                // 6. Insert new preedit text in cursor position.
+                // 7. Place cursor inside preedit text.
+                // 8. Perform the requested action.
+                
+                // TODO: perform the action
 
                 if let Some(DeleteSurroundingText { before, after }) =
                     text_input_data.pending_delete
@@ -269,6 +288,12 @@ pub struct TextInputDataInner {
     /// The text around the cursor to delete on `done`
     pending_delete: Option<DeleteSurroundingText>,
 
+    /// The new span to select on `done`.
+    pending_move: Option<MoveCursor>,
+    
+    /// The action to perform on `done`.
+    pending_action: Option<Action>,
+
     /// Last preedit empty.
     last_preedit_empty: bool,
 }
@@ -280,6 +305,8 @@ impl Default for TextInputDataInner {
             pending_commit: None,
             pending_preedit: None,
             pending_delete: None,
+            pending_move: None,
+            pending_action: None,
             last_preedit_empty: true,
         }
     }
@@ -300,6 +327,15 @@ struct DeleteSurroundingText {
     before: usize,
     /// Bytes after cursor
     after: usize,
+}
+
+/// The move_cursor request
+#[derive(Clone)]
+struct MoveCursor {
+    /// The beginning of the resulting selection
+    anchor: i32,
+    /// The end of the resulting selection, with  active cursor
+    cursor: i32,
 }
 
 /// State change requested by the application.
