@@ -202,7 +202,18 @@ impl Dispatch<XxTextInputV3, TextInputData, WinitState> for TextInputState {
 impl TextInputExt for XxTextInputV3 {
     fn set_state(&self, state: Option<&super::ClientState>, send_enable: bool) {
         let state = match state {
-            Some(state) => ClientState::from(state.clone()),
+            Some(state) => {
+                let (state, unsupported_flags) = ClientState::new(state.clone());
+                if send_enable {
+                    if unsupported_flags != ImeCapabilities::new() {
+                        warn!(
+                            "Backend doesn't support all requested IME capabilities: {:?}.\n Ignoring.",
+                            unsupported_flags
+                        );
+                    }
+                }
+                state
+            },
             None => {
                 self.disable();
                 self.commit();
@@ -310,8 +321,8 @@ struct ClientState {
     surrounding_text: ImeSurroundingText,
 }
 
-impl From<super::ClientState> for ClientState {
-    fn from(value: super::ClientState) -> Self {
+impl ClientState {
+    fn new(value: super::ClientState) -> (Self, ImeCapabilities) {
         let super::ClientState {
             capabilities,
             content_type,
@@ -323,24 +334,17 @@ impl From<super::ClientState> for ClientState {
             .without_hint_and_purpose()
             .without_cursor_area()
             .without_surrounding_text();
-
-        if unsupported_flags != ImeCapabilities::new() {
-            warn!(
-                "Backend doesn't support all requested IME capabilities: {:?}.\n Ignoring.",
-                unsupported_flags
-            );
-        }
         
-        Self {
+        let ret = Self {
             capabilities,
             content_type: content_type.into(),
             cursor_area,
             surrounding_text,
-        }
+        };
+        
+        (ret, unsupported_flags)
     }
-}
 
-impl ClientState {
     pub fn content_type(&self) -> Option<ContentType> {
         self.capabilities.hint_and_purpose().then_some(self.content_type)
     }

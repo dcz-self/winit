@@ -133,8 +133,10 @@ impl<'a> PartialEq<TextInputRef<'a>> for TextInput {
 }
 
 trait TextInputExt {
-    /// Applies the entire state atomically to the input method. It will skip the "enable" request
-    /// if `already_enabled` is `true`.
+    /// Applies the entire state atomically to the input method.
+    ///
+    /// It will send the "enable" request and warn user about capabilities unsupported by the backend
+    /// if and only if `send_enable` is `true`.
     fn set_state(&self, state: Option<&ClientState>, send_enable: bool);
 }
 
