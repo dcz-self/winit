@@ -6,14 +6,15 @@
 pub mod v3;
 pub mod xx;
 
+use dpi::{LogicalPosition, LogicalSize};
 use sctk::reexports::client::QueueHandle;
 use sctk::reexports::protocols::wp::text_input::zv3::client::zwp_text_input_v3::ZwpTextInputV3;
 use sctk::reexports::protocols_experimental::text_input::v3::client::xx_text_input_v3::XxTextInputV3;
 use tracing::{debug, warn};
 // unverified
-pub use v3::ClientState;
 use wayland_client::globals::{BindError, GlobalList};
 use wayland_client::protocol::wl_seat::WlSeat;
+use winit_core::window::{ImeCapabilities, ImeHint, ImePurpose, ImeRequestData, ImeSurroundingText};
 
 use crate::seat::text_input::v3::ZwpTextInputV3Ext;
 use crate::seat::text_input::xx::XxTextInputV3Ext;
@@ -59,8 +60,8 @@ pub enum TextInput {
 impl TextInput {
     pub fn set_state(&self, state: Option<&ClientState>, send_enable: bool) {
         match self {
-            Self::V3(obj) => obj.set_state(state, send_enable),
-            Self::Xx(obj) => obj.set_state(state, send_enable),
+            Self::V3(obj) => obj.set_state(state.into(), send_enable),
+            Self::Xx(obj) => obj.set_state(state.into(), send_enable),
         }
     }
 
@@ -130,5 +131,87 @@ impl<'a> PartialEq<TextInput> for TextInputRef<'a> {
 impl<'a> PartialEq<TextInputRef<'a>> for TextInput {
     fn eq(&self, other: &TextInputRef<'a>) -> bool {
         other.eq(self)
+    }
+}
+
+
+/// State requested by the application.
+///
+/// This is a version that uses text_input abstractions translated from the ones used in
+/// winit::core::window::ImeStateChange.
+///
+/// Fields that are initially set to None are unsupported capabilities
+/// and trying to set them raises an error.
+#[derive(Debug, PartialEq, Clone)]
+pub struct ClientState {
+    capabilities: ImeCapabilities,
+    content_type: (ImeHint, ImePurpose),
+    /// The IME cursor area which should not be covered by the input method popup.
+    cursor_area: (LogicalPosition<u32>, LogicalSize<u32>),
+
+    /// The `ImeSurroundingText` struct is based on the Wayland model.
+    /// When this changes, another struct might be needed.
+    surrounding_text: ImeSurroundingText,
+}
+
+impl ClientState {
+    pub fn new(
+        capabilities: ImeCapabilities,
+        request_data: ImeRequestData,
+        scale_factor: f64,
+    ) -> Self {
+        let mut this = Self {
+            capabilities,
+            content_type: Default::default(),
+            cursor_area: Default::default(),
+            surrounding_text: ImeSurroundingText::new(String::new(), 0, 0).unwrap(),
+        };
+
+        this.update(request_data, scale_factor);
+        this
+    }
+
+    pub fn capabilities(&self) -> ImeCapabilities {
+        self.capabilities
+    }
+
+    /// Updates the fields of the state which are present in update_fields.
+    pub fn update(&mut self, request_data: ImeRequestData, scale_factor: f64) {
+        if let Some((hint, purpose)) = request_data.hint_and_purpose {
+            self.content_type = (hint, purpose);
+        } else {
+            warn!("discarding IME hint and purpose update because capability is not enabled.");
+        }
+
+        if let Some((position, size)) = request_data.cursor_area {
+            if self.capabilities.cursor_area() {
+                let position: LogicalPosition<u32> = position.to_logical(scale_factor);
+                let size: LogicalSize<u32> = size.to_logical(scale_factor);
+                self.cursor_area = (position, size);
+            } else {
+                warn!("discarding IME cursor area update because capability is not enabled.");
+            }
+        }
+
+
+        if let Some(surrounding) = request_data.surrounding_text {
+            if self.capabilities.surrounding_text() {
+                self.surrounding_text = surrounding;
+            } else {
+                warn!("discarding IME surrounding text update because capability is not enabled.");
+            }
+        }
+    }
+
+    pub fn content_type(&self) -> Option<(ImeHint, ImePurpose)> {
+        self.capabilities.hint_and_purpose().then_some(self.content_type)
+    }
+
+    pub fn cursor_area(&self) -> Option<(LogicalPosition<u32>, LogicalSize<u32>)> {
+        self.capabilities.cursor_area().then_some(self.cursor_area)
+    }
+
+    pub fn surrounding_text(&self) -> Option<&ImeSurroundingText> {
+        self.capabilities.surrounding_text().then_some(&self.surrounding_text)
     }
 }

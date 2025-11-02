@@ -12,7 +12,7 @@ use sctk::reexports::protocols_experimental::text_input::v3::client::xx_text_inp
 use tracing::warn;
 use winit_core::event::{Ime, WindowEvent};
 use winit_core::window::{
-    ImeCapabilities, ImeHint, ImePurpose, ImeRequestData, ImeSurroundingText,
+    ImeCapabilities, ImeHint, ImePurpose, ImeSurroundingText,
 };
 
 use crate::state::WinitState;
@@ -201,13 +201,13 @@ impl Dispatch<XxTextInputV3, TextInputData, WinitState> for TextInputState {
 pub trait XxTextInputV3Ext {
     /// Applies the entire state atomically to the input method. It will skip the "enable" request
     /// if `already_enabled` is `true`.
-    fn set_state(&self, state: Option<&ClientState>, send_enable: bool);
+    fn set_state(&self, state: Option<&super::ClientState>, send_enable: bool);
 }
 
 impl XxTextInputV3Ext for XxTextInputV3 {
-    fn set_state(&self, state: Option<&ClientState>, send_enable: bool) {
+    fn set_state(&self, state: Option<&super::ClientState>, send_enable: bool) {
         let state = match state {
-            Some(state) => state,
+            Some(state) => ClientState::from(state.clone()),
             None => {
                 self.disable();
                 self.commit();
@@ -304,7 +304,7 @@ struct DeleteSurroundingText {
 /// Fields that are initially set to None are unsupported capabilities
 /// and trying to set them raises an error.
 #[derive(Debug, PartialEq, Clone)]
-pub struct ClientState {
+struct ClientState {
     capabilities: ImeCapabilities,
     content_type: ContentType,
     /// The IME cursor area which should not be covered by the input method popup.
@@ -315,18 +315,14 @@ pub struct ClientState {
     surrounding_text: ImeSurroundingText,
 }
 
-impl ClientState {
-    pub fn new(
-        capabilities: ImeCapabilities,
-        request_data: ImeRequestData,
-        scale_factor: f64,
-    ) -> Self {
-        let mut this = Self {
+impl From<super::ClientState> for ClientState {
+    fn from(value: super::ClientState) -> Self {
+        let super::ClientState {
             capabilities,
-            content_type: Default::default(),
-            cursor_area: Default::default(),
-            surrounding_text: ImeSurroundingText::new(String::new(), 0, 0).unwrap(),
-        };
+            content_type,
+            cursor_area,
+            surrounding_text,
+        } = value;
 
         let unsupported_flags = capabilities
             .without_hint_and_purpose()
@@ -339,42 +335,17 @@ impl ClientState {
                 unsupported_flags
             );
         }
-
-        this.update(request_data, scale_factor);
-        this
-    }
-
-    pub fn capabilities(&self) -> ImeCapabilities {
-        self.capabilities
-    }
-
-    /// Updates the fields of the state which are present in update_fields.
-    pub fn update(&mut self, request_data: ImeRequestData, scale_factor: f64) {
-        if let Some((hint, purpose)) =
-            request_data.hint_and_purpose.filter(|_| self.capabilities.hint_and_purpose())
-        {
-            self.content_type = (hint, purpose).into();
-        }
-
-        if let Some((position, size)) = request_data.cursor_area {
-            if self.capabilities.cursor_area() {
-                let position: LogicalPosition<u32> = position.to_logical(scale_factor);
-                let size: LogicalSize<u32> = size.to_logical(scale_factor);
-                self.cursor_area = (position, size);
-            } else {
-                warn!("discarding IME cursor area update without capability enabled.");
-            }
-        }
-
-        if let Some(surrounding) = request_data.surrounding_text {
-            if self.capabilities.surrounding_text() {
-                self.surrounding_text = surrounding;
-            } else {
-                warn!("discarding IME surrounding text update without capability enabled.");
-            }
+        
+        Self {
+            capabilities,
+            content_type: content_type.into(),
+            cursor_area,
+            surrounding_text,
         }
     }
+}
 
+impl ClientState {
     pub fn content_type(&self) -> Option<ContentType> {
         self.capabilities.hint_and_purpose().then_some(self.content_type)
     }
