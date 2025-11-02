@@ -16,8 +16,6 @@ use wayland_client::globals::{BindError, GlobalList};
 use wayland_client::protocol::wl_seat::WlSeat;
 use winit_core::window::{ImeCapabilities, ImeHint, ImePurpose, ImeRequestData, ImeSurroundingText};
 
-use crate::seat::text_input::v3::ZwpTextInputV3Ext;
-use crate::seat::text_input::xx::XxTextInputV3Ext;
 use crate::state::WinitState;
 
 #[derive(Debug)]
@@ -134,6 +132,11 @@ impl<'a> PartialEq<TextInputRef<'a>> for TextInput {
     }
 }
 
+trait TextInputExt {
+    /// Applies the entire state atomically to the input method. It will skip the "enable" request
+    /// if `already_enabled` is `true`.
+    fn set_state(&self, state: Option<&ClientState>, send_enable: bool);
+}
 
 /// State requested by the application.
 ///

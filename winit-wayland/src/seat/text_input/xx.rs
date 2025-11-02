@@ -16,6 +16,7 @@ use winit_core::window::{
 };
 
 use crate::state::WinitState;
+use super::TextInputExt;
 
 #[derive(Debug)]
 pub struct TextInputState {
@@ -198,13 +199,7 @@ impl Dispatch<XxTextInputV3, TextInputData, WinitState> for TextInputState {
     }
 }
 
-pub trait XxTextInputV3Ext {
-    /// Applies the entire state atomically to the input method. It will skip the "enable" request
-    /// if `already_enabled` is `true`.
-    fn set_state(&self, state: Option<&super::ClientState>, send_enable: bool);
-}
-
-impl XxTextInputV3Ext for XxTextInputV3 {
+impl TextInputExt for XxTextInputV3 {
     fn set_state(&self, state: Option<&super::ClientState>, send_enable: bool) {
         let state = match state {
             Some(state) => ClientState::from(state.clone()),
