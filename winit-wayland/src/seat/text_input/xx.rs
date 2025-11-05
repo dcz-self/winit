@@ -200,6 +200,17 @@ impl Dispatch<XxTextInputV3, TextInputData, WinitState> for TextInputState {
                         .events_sink
                         .push_window_event(WindowEvent::Ime(Ime::Commit(text)), window_id);
                 }
+                
+                // Make new selection.
+                if let Some(selection) = text_input_data.pending_move.take() {
+                    state.events_sink.push_window_event(
+                        WindowEvent::Ime(Ime::MoveCursor {
+                            anchor: selection.anchor,
+                            cursor: selection.cursor,
+                        }),
+                        window_id,
+                    );
+                }
 
                 // Send preedit.
                 if let Some(preedit) = text_input_data.pending_preedit.take() {

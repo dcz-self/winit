@@ -1906,7 +1906,7 @@ impl ImeCapabilities {
         Self(self.0.union(ImeCapabilitiesFlags::SURROUNDING_TEXT))
     }
 
-    /// Marks `surrounding_text` as unsupported.
+    /// Marks `actions` as unsupported.
     ///
     /// For more details see [`ImeRequestData::with_surrounding_text`].
     pub const fn without_surrounding_text(self) -> Self {
@@ -1916,6 +1916,44 @@ impl ImeCapabilities {
     /// Returns `true` if `surrounding_text` is supported.
     pub const fn surrounding_text(&self) -> bool {
         self.0.contains(ImeCapabilitiesFlags::SURROUNDING_TEXT)
+    }
+    
+    /// Marks `move_cursor` as supported.
+    ///
+    /// For more details see [`crate::event::Ime::MoveCursor`].
+    pub const fn with_move_cursor(self) -> Self {
+        Self(self.0.union(ImeCapabilitiesFlags::MOVE_CURSOR))
+    }
+
+    /// Marks `move_cursor` as unsupported.
+    ///
+    /// For more details see [`crate::event::Ime::MoveCursor`].
+    pub const fn without_move_cursor(self) -> Self {
+        Self(self.0.difference(ImeCapabilitiesFlags::MOVE_CURSOR))
+    }
+
+    /// Returns `true` if `move_cursor` is supported.
+    pub const fn move_cursor(&self) -> bool {
+        self.0.contains(ImeCapabilitiesFlags::MOVE_CURSOR)
+    }
+
+    /// Marks `actions_v3_2` as supported.
+    ///
+    /// For more details see [`crate::event::Ime::Actions`].
+    pub const fn with_actions_v3_2(self) -> Self {
+        Self(self.0.union(ImeCapabilitiesFlags::ACTIONS_V3_2))
+    }
+
+    /// Marks `actions_v3_2` as unsupported.
+    ///
+    /// For more details see [`crate::event::Ime::Actions`].
+    pub const fn without_actions_v3_2(self) -> Self {
+        Self(self.0.difference(ImeCapabilitiesFlags::ACTIONS_V3_2))
+    }
+
+    /// Returns `true` if `actions_v3_2` is supported.
+    pub const fn actions_v3_2(&self) -> bool {
+        self.0.contains(ImeCapabilitiesFlags::ACTIONS_V3_2)
     }
 }
 
@@ -1929,6 +1967,11 @@ bitflags! {
         const CURSOR_AREA = 1 << 1;
         /// Client supports reporting the text around the caret
         const SURROUNDING_TEXT = 1 << 2;
+        /// Client supports the IME changing the cursor placement and selection
+        const MOVE_CURSOR = 1 << 3;
+        /// Client supports all new text-input actions
+        /// (TODO: split up all actions into separate flags)
+        const ACTIONS_V3_2 = 1 << 4;
     }
 }
 

@@ -35,13 +35,30 @@ struct App {
     modifiers: ModifiersState,
 }
 
+#[derive(Debug, Clone, Copy, Default)]
+struct Selection {
+    /// Start
+    anchor: usize,
+    /// End with cursor
+    cursor: usize,
+}
+
+impl Selection {
+    /// No selection
+    fn new_cursor(position: usize) -> Self {
+        Self {
+            anchor: position,
+            cursor: position,
+        }
+    }
+}
+
 /// State of the undisplayed text input field.
 #[derive(Debug)]
 struct TextInputState {
     ime_enabled: bool,
     /// The contents of the emulated text field for IME purposes (not displayed).
-    /// (text, cursor position in bytes).
-    contents: (String, usize),
+    contents: (String, Selection),
     /// The purpose of the contents the emulated text field expects
     purpose: ImePurpose,
     /// The behaviour hints for the IME regarding the emulated text field
@@ -49,52 +66,80 @@ struct TextInputState {
 }
 
 impl TextInputState {
-    fn text_and_cursor(&self) -> (&str, usize) {
+    fn text_and_cursor(&self) -> (&str, Selection) {
         (&self.contents.0, self.contents.1)
+    }
+    
+    fn delete_selection(&mut self) {
+        let (_, selection) = &self.contents;
+        let start = cmp::min(selection.anchor, selection.cursor);
+        self.delete_text_(start, cmp::max(selection.anchor, selection.cursor));
     }
     
     /// Adds text in the current cursor position and move cursor
     fn add_text(&mut self, text: &str) {
-        let (field, cursor) = &self.contents;
+        self.delete_selection();
+        let (field, selection) = &self.contents;
+        let cursor = selection.cursor;
         // cursor must already be on char boundary
-        let field = format!("{}{}{}", &field[..*cursor], text, &field[*cursor..]);
+        let field = format!("{}{}{}", &field[..cursor], text, &field[cursor..]);
         let cursor = cursor + text.len();
-        self.contents = (field, cursor);
+        self.contents = (field, Selection::new_cursor(cursor));
     }
 
     /// Deletes text, assuming that the cursor is within the deleted range.
-    fn delete_text(&mut self, delete_start: usize, delete_end: usize) {
+    fn delete_text_(&mut self, delete_start: usize, delete_end: usize) {
         let (field, _) = &self.contents;
         let new_text = format!("{}{}", &field[..delete_start], &field[delete_end..]);
-        self.contents = (new_text, delete_start);
+        self.contents = (new_text, Selection::new_cursor(delete_start));
     }
 
     fn backspace(&mut self) {
-        let (field, cursor) = &self.contents;
-        let text_end = &field[*cursor..];
-        let cursor = field[..*cursor].char_indices().next_back().map(|c| c.0).unwrap_or(*cursor);
-        self.contents = (format!("{}{}", &field[..cursor], text_end), cursor);
+        self.delete_selection();
+        let (field, selection) = &self.contents;
+        let cursor = selection.cursor;
+        let text_end = &field[cursor..];
+        let cursor = field[..cursor].char_indices().next_back().map(|c| c.0).unwrap_or(cursor);
+        self.contents = (format!("{}{}", &field[..cursor], text_end), Selection::new_cursor(cursor));
     }
-    
+
     fn delete(&mut self) {
-        let (field, cursor) = &self.contents;
-        let text_start = &field[..*cursor];
-        let cursor = field[*cursor..].char_indices().next().map(|c| c.0).unwrap_or(*cursor);
-        self.contents = (format!("{}{}", text_start, &field[cursor..]), cursor);
+        self.delete_selection();
+        let (field, selection) = &self.contents;
+        let cursor = selection.cursor;
+        let text_start = &field[..cursor];
+        let cursor = field[cursor..].char_indices().next().map(|c| c.0).unwrap_or(cursor);
+        self.contents = (format!("{}{}", text_start, &field[cursor..]), Selection::new_cursor(cursor));
     }
     
-    fn move_cursor(&mut self, cursor_offset: i32) {
-        let (field, cursor) = &self.contents;
-        let cursor = cursor.checked_add_signed(cursor_offset as _);
-        if let Some(cursor) = cursor {
-            if cursor < field.len() {
-                self.contents.1 = cursor;
+    fn move_cursor(&mut self, cursor_offset: i32, anchor_offset: i32) {
+        let (field, selection) = &self.contents;
+        let cursor = selection.cursor;
+        let anchor = cursor.checked_add_signed(cursor_offset as _);
+        let anchor = if let Some(anchor) = anchor {
+            if anchor < field.len() {
+                anchor
             } else {
-                warn!("IME requested a move beyond the end, ignoring.");
+                warn!("IME requested a selection beyond the end, clamping.");
+                field.len()
             }
         } else {
-            warn!("IME requested a move before the beginning, ignoring.");
-        }
+            warn!("IME requested a selection before the beginning, clamping.");
+            0
+        };
+        let cursor = cursor.checked_add_signed(cursor_offset as _);
+        let cursor = if let Some(cursor) = cursor {
+            if cursor < field.len() {
+                cursor
+            } else {
+                warn!("IME requested a selection beyond the end, clamping.");
+                field.len()
+            }
+        } else {
+            warn!("IME requested a selection before the beginning, clamping.");
+            0
+        };
+        self.contents.1 = Selection { anchor, cursor };
     }
 }
 
@@ -119,7 +164,9 @@ impl ApplicationHandler for App {
             ImeCapabilities::new()
                 .with_hint_and_purpose()
                 .with_cursor_area()
-                .with_surrounding_text(),
+                .with_surrounding_text()
+                .with_move_cursor()
+                .with_actions_v3_2(),
             self.get_ime_update(),
         )
         .unwrap();
@@ -232,7 +279,7 @@ impl App {
                 self.print_input_state();
             },
             Key::Named(NamedKey::Delete) => {
-                self.input_state.backspace();
+                self.input_state.delete();
                 self.print_input_state();
             },
             _ => {
@@ -267,23 +314,20 @@ impl App {
                 // selection into account. The deletion happens
                 // *around* the pre-edit, and may remove the whole
                 // selection or a part of it.
-                let delete_start = cursor.saturating_sub(before_bytes);
-                let delete_end = cmp::min(cursor.saturating_add(after_bytes), text.len());
+                let delete_start = cursor.cursor.saturating_sub(before_bytes);
+                let delete_end = cmp::min(cursor.cursor.saturating_add(after_bytes), text.len());
                 if text.is_char_boundary(delete_start) && text.is_char_boundary(delete_end) {
-                    self.input_state.delete_text(delete_start, delete_end);
+                    self.input_state.delete_text_(delete_start, delete_end);
                     info!("IME deleted bytes: {before_bytes}, {after_bytes}");
                     self.print_input_state();
                 } else {
                     error!("Buggy IME tried to delete with indices not on char boundary.");
                 }
             },
-            Ime::MoveCursor { anchor, cursor } => {
-                if anchor != cursor {
-                    info!("Selections unsupported in this demo, ignoring");
-                } else {
-                    self.input_state.move_cursor(cursor);
-                }
-            },
+            Ime::MoveCursor { anchor, cursor } => self.input_state.move_cursor(cursor, anchor),
+            Ime::Action(action) => {
+                error!("Actions not implemented yet: {action:?}")
+            }
             Ime::Disabled => info!("IME disabled for Window={:?}", window.id()),
         }
     }
@@ -296,7 +340,9 @@ impl App {
                 ImeCapabilities::new()
                     .with_hint_and_purpose()
                     .with_cursor_area()
-                    .with_surrounding_text(),
+                    .with_surrounding_text()
+                    .with_move_cursor()
+                    .with_actions_v3_2(),
                 self.get_ime_update(),
             )
             .unwrap();
@@ -311,8 +357,8 @@ impl App {
     }
 
     fn get_ime_update(&self) -> ImeRequestData {
-        let text = &self.input_state.contents;
-        let cursor = text.len();
+        let (text, selection) = &self.input_state.contents;
+        let cursor = selection.cursor;
         // A rudimentary text field emulation: the caret moves right by a constant amount for each
         // code point.
 
@@ -342,11 +388,8 @@ impl App {
     }
 
     fn print_input_state(&self) {
-        let (text, cursor) = &self.input_state.text_and_cursor();
-        // Representing a selection with the cursor and anchor as ends is not
-        // supported yet. Using the same position for anchor to mark no
-        // selection.
-        info!("{}", preedit_with_cursor(text, *cursor, *cursor));
+        let (text, selection) = &self.input_state.text_and_cursor();
+        info!("{}", preedit_with_selection(text, *selection));
     }
 
     fn window(&self) -> &dyn Window {
@@ -355,7 +398,10 @@ impl App {
 }
 
 /// Prints text of the text field, highlighting cursor position
-fn preedit_with_cursor(text: &str, cursor: usize, anchor: usize) -> String {
+fn preedit_with_selection(
+    text: &str,
+    Selection { anchor, cursor }: Selection,
+) -> String {
     preedit_with_cursor_checked(text, cursor, anchor).unwrap_or_else(|e| format!("INVALID: {e}"))
 }
 
@@ -396,7 +442,7 @@ Use CTRL+h to cycle content hint permutations.
         window: None,
         input_state: TextInputState {
             ime_enabled: true,
-            contents: String::new(),
+            contents: Default::default(),
             purpose: ImePurpose::Normal,
             // While we don't show text and thus we use ImeHint::HIDDEN
             // it may cause the IME to not do layout switch, etc at all.

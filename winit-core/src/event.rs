@@ -991,7 +991,10 @@ pub enum Ime {
         /// The end of drag, with the other side of selection and the new cursor position.
         cursor: i32,
     },
-    
+
+    /// The IME requested a previously advertised action to be performed.
+    Action(ImeAction),
+
     /// Notifies when the IME was disabled.
     ///
     /// After receiving this event you won't get any more [`Preedit`][Self::Preedit] or
@@ -999,6 +1002,24 @@ pub enum Ime {
     /// also stop issuing IME related requests like [`Window::set_ime_cursor_area`] and clear
     /// pending preedit text.
     Disabled,
+}
+
+/// Actions that the IME can request to be performed.
+///
+/// Currently supported are those from wayland xx-text-input protocol.
+#[derive(Debug, Hash, PartialEq, Eq, Clone, Copy)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum ImeAction {
+    /// This should be triggered when the user is done with editing the field and wants to move on. For example, the query was typed and the user wants the search result. Or the name was entered and the address needs to be typed next.
+    Finish,
+    /// Select all text in the input field
+    SelectAll,
+    /// Cut selection into clipboard
+    ClipboardCut,
+    /// Copy selection into clipboard
+    ClipboardCopy,
+    /// Paste from clipboard
+    ClipboardPaste,
 }
 
 /// Describes touch-screen input state.

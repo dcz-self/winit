@@ -10,7 +10,7 @@ use dpi::{LogicalPosition, LogicalSize};
 use sctk::reexports::client::QueueHandle;
 use sctk::reexports::protocols::wp::text_input::zv3::client::zwp_text_input_v3::ZwpTextInputV3;
 use sctk::reexports::protocols_experimental::text_input::v3::client::xx_text_input_v3::XxTextInputV3;
-use tracing::{debug, warn};
+use tracing::{info, warn};
 // unverified
 use wayland_client::globals::{BindError, GlobalList};
 use wayland_client::protocol::wl_seat::WlSeat;
@@ -31,11 +31,11 @@ impl TextInputState {
     ) -> Result<Self, BindError> {
         match xx::TextInputState::new(globals, queue_handle) {
             Ok(state) => {
-                debug!("Using experimental text input protocol");
+                info!("Using experimental text input protocol");
                 return Ok(Self::Xx(state));
             }
             Err(e) => {
-                warn!("Failed to use xx-text-input: {e}");
+                info!("Failed to use xx-text-input: {e}");
             }
         };
         Ok(Self::V3(v3::TextInputState::new(globals, queue_handle)?))
