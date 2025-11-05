@@ -11,7 +11,7 @@ use sctk::reexports::client::QueueHandle;
 use sctk::reexports::protocols::wp::text_input::zv3::client::zwp_text_input_v3::ZwpTextInputV3;
 use sctk::reexports::protocols_experimental::text_input::v3::client::xx_text_input_v3::XxTextInputV3;
 use tracing::{info, warn};
-// unverified
+
 use wayland_client::globals::{BindError, GlobalList};
 use wayland_client::protocol::wl_seat::WlSeat;
 use winit_core::window::{ImeCapabilities, ImeHint, ImePurpose, ImeRequestData, ImeSurroundingText};
@@ -197,7 +197,6 @@ impl ClientState {
                 warn!("discarding IME cursor area update because capability is not enabled.");
             }
         }
-
 
         if let Some(surrounding) = request_data.surrounding_text {
             if self.capabilities.surrounding_text() {

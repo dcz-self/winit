@@ -7,7 +7,7 @@ use sctk::reexports::client::protocol::wl_surface::WlSurface;
 use sctk::reexports::client::{Connection, Dispatch, Proxy, QueueHandle, delegate_dispatch};
 use sctk::reexports::protocols_experimental::text_input::v3::client::xx_text_input_manager_v3::XxTextInputManagerV3;
 use sctk::reexports::protocols_experimental::text_input::v3::client::xx_text_input_v3::{
-    Action, ContentHint, ContentPurpose, Event as TextInputEvent, XxTextInputV3
+    Action, ContentHint, ContentPurpose, Event as TextInputEvent, SupportedFeatures, XxTextInputV3
 };
 use tracing::warn;
 use wayland_client::WEnum;
@@ -253,6 +253,17 @@ impl TextInputExt for XxTextInputV3 {
 
         if send_enable {
             self.enable();
+            if state.capabilities.move_cursor() {
+                self.announce_supported_features(SupportedFeatures::MoveCursor);
+            }
+            if state.capabilities.actions_v3_2() {
+                self.set_available_actions(
+                    [Action::Finish, Action::SelectAll, Action::Cut, Action::Copy, Action::Paste]
+                        .into_iter()
+                        .map(|a| a as u8)
+                        .collect()
+                )
+            }
         }
 
         if let Some(content_type) = state.content_type() {
