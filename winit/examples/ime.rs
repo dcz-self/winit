@@ -11,7 +11,7 @@ use std::error::Error;
 use dpi::{LogicalPosition, PhysicalSize};
 use tracing::{error, info, warn};
 use winit::application::ApplicationHandler;
-use winit::event::{Ime, WindowEvent};
+use winit::event::{Ime, ImeAction, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, EventLoop};
 use winit::keyboard::{Key, ModifiersState, NamedKey};
 #[cfg(web_platform)]
@@ -115,13 +115,13 @@ impl TextInputState {
     fn move_cursor(&mut self, cursor_offset: i32, anchor_offset: i32) {
         let (field, selection) = &self.contents;
         let cursor = selection.cursor;
-        let anchor = cursor.checked_add_signed(cursor_offset as _);
+        let anchor = cursor.checked_add_signed(anchor_offset as _);
         let anchor = if let Some(anchor) = anchor {
-            if anchor < field.len() {
-                anchor
-            } else {
+            if anchor > field.len() {
                 warn!("IME requested a selection beyond the end, clamping.");
                 field.len()
+            } else {
+                anchor
             }
         } else {
             warn!("IME requested a selection before the beginning, clamping.");
@@ -129,11 +129,11 @@ impl TextInputState {
         };
         let cursor = cursor.checked_add_signed(cursor_offset as _);
         let cursor = if let Some(cursor) = cursor {
-            if cursor < field.len() {
-                cursor
-            } else {
+            if cursor > field.len() {
                 warn!("IME requested a selection beyond the end, clamping.");
                 field.len()
+            } else {
+                cursor
             }
         } else {
             warn!("IME requested a selection before the beginning, clamping.");
@@ -276,10 +276,20 @@ impl App {
             },
             Key::Named(NamedKey::Backspace) => {
                 self.input_state.backspace();
+                if self.input_state.ime_enabled {
+                    self.window()
+                        .request_ime_update(ImeRequest::Update(self.get_ime_update()))
+                        .unwrap();
+                }
                 self.print_input_state();
             },
             Key::Named(NamedKey::Delete) => {
                 self.input_state.delete();
+                if self.input_state.ime_enabled {
+                    self.window()
+                        .request_ime_update(ImeRequest::Update(self.get_ime_update()))
+                        .unwrap();
+                }
                 self.print_input_state();
             },
             _ => {
@@ -324,10 +334,18 @@ impl App {
                     error!("Buggy IME tried to delete with indices not on char boundary.");
                 }
             },
-            Ime::MoveCursor { anchor, cursor } => self.input_state.move_cursor(cursor, anchor),
+            Ime::MoveCursor { anchor, cursor } => {
+                self.input_state.move_cursor(cursor, anchor);
+                self.window()
+                    .request_ime_update(ImeRequest::Update(self.get_ime_update()))
+                    .unwrap();
+                self.print_input_state();
+            },
             Ime::Action(action) => {
-                error!("Actions not implemented yet: {action:?}")
-            }
+                match action {
+                    ImeAction::Finish => println!("User finished editing. Ignoring: there's no good reaction for this demo app."),
+                }
+            },
             Ime::Disabled => info!("IME disabled for Window={:?}", window.id()),
         }
     }

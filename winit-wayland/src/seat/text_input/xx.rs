@@ -11,7 +11,7 @@ use sctk::reexports::protocols_experimental::text_input::v3::client::xx_text_inp
 };
 use tracing::warn;
 use wayland_client::WEnum;
-use winit_core::event::{Ime, WindowEvent};
+use winit_core::event::{Ime, ImeAction, WindowEvent};
 use winit_core::window::{
     ImeCapabilities, ImeHint, ImePurpose, ImeSurroundingText,
 };
@@ -29,7 +29,7 @@ impl TextInputState {
         globals: &GlobalList,
         queue_handle: &QueueHandle<WinitState>,
     ) -> Result<Self, BindError> {
-        let text_input_manager = globals.bind(queue_handle, 1..=1, GlobalData)?;
+        let text_input_manager = globals.bind(queue_handle, 2..=2, GlobalData)?;
         Ok(Self { text_input_manager })
     }
 }
@@ -223,6 +223,22 @@ impl Dispatch<XxTextInputV3, TextInputData, WinitState> for TextInputState {
                         window_id,
                     );
                 }
+                
+                if let Some(action) = text_input_data.pending_action.take() {
+                    let action = match action {
+                        Action::Finish => Some(ImeAction::Finish),
+                        other => {
+                            warn!("Received unsupported action {other:?}");
+                            None
+                        },
+                    };
+                    if let Some(action) = action {
+                        state.events_sink.push_window_event(
+                            WindowEvent::Ime(Ime::Action(action)),
+                            window_id,
+                        );
+                    }
+                }
             },
             _ => {},
         }
@@ -258,7 +274,7 @@ impl TextInputExt for XxTextInputV3 {
             }
             if state.capabilities.actions_v3_2() {
                 self.set_available_actions(
-                    [Action::Finish, Action::SelectAll, Action::Cut, Action::Copy, Action::Paste]
+                    [Action::Finish]
                         .into_iter()
                         .map(|a| a as u8)
                         .collect()
@@ -389,6 +405,9 @@ impl ClientState {
         } = value;
 
         let unsupported_flags = capabilities
+        // Those capabilities are supported.
+            .without_move_cursor()
+            .without_actions_v3_2()
             .without_hint_and_purpose()
             .without_cursor_area()
             .without_surrounding_text();

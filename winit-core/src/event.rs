@@ -1012,14 +1012,6 @@ pub enum Ime {
 pub enum ImeAction {
     /// This should be triggered when the user is done with editing the field and wants to move on. For example, the query was typed and the user wants the search result. Or the name was entered and the address needs to be typed next.
     Finish,
-    /// Select all text in the input field
-    SelectAll,
-    /// Cut selection into clipboard
-    ClipboardCut,
-    /// Copy selection into clipboard
-    ClipboardCopy,
-    /// Paste from clipboard
-    ClipboardPaste,
 }
 
 /// Describes touch-screen input state.
