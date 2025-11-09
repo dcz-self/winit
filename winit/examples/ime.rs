@@ -109,7 +109,27 @@ impl TextInputState {
         let cursor = selection.cursor;
         let text_start = &field[..cursor];
         let cursor = field[cursor..].char_indices().next().map(|c| c.0).unwrap_or(cursor);
-        self.contents = (format!("{}{}", text_start, &field[cursor..]), Selection::new_cursor(cursor));
+        self.contents = (
+            format!("{}{}", text_start, &field[cursor..]),
+            Selection::new_cursor(cursor)
+        );
+    }
+    
+    fn move_cursor_chars(&mut self, offset: i32) {
+        let (field, selection) = &self.contents;
+        let (before, after) = field.split_at(selection.cursor);
+        let bytes = if offset >= 0 {
+            selection.cursor + after.char_indices()
+                .nth(offset as usize)
+                .map(|(i, _)| i)
+                .unwrap_or(after.chars().count())
+        } else {
+            before.char_indices()
+                .nth_back((-offset) as usize - 1)
+                .map(|(i, _)| dbg!(i))
+                .unwrap_or(0)
+        };
+        self.contents.1 = Selection::new_cursor(bytes);
     }
     
     fn move_cursor(&mut self, cursor_offset: i32, anchor_offset: i32) {
@@ -292,6 +312,24 @@ impl App {
                 }
                 self.print_input_state();
             },
+            Key::Named(NamedKey::ArrowLeft) => {
+                self.input_state.move_cursor_chars(-1);
+                if self.input_state.ime_enabled {
+                    self.window()
+                        .request_ime_update(ImeRequest::Update(self.get_ime_update()))
+                        .unwrap();
+                }
+                self.print_input_state();
+            },
+            Key::Named(NamedKey::ArrowRight) => {
+                self.input_state.move_cursor_chars(1);
+                if self.input_state.ime_enabled {
+                    self.window()
+                        .request_ime_update(ImeRequest::Update(self.get_ime_update()))
+                        .unwrap();
+                }
+                self.print_input_state();
+            },
             _ => {
                 if let Some(text) = event.text {
                     self.input_state.add_text(&text);
@@ -377,6 +415,7 @@ impl App {
     fn get_ime_update(&self) -> ImeRequestData {
         let (text, selection) = &self.input_state.contents;
         let cursor = selection.cursor;
+        let anchor = selection.anchor;
         // A rudimentary text field emulation: the caret moves right by a constant amount for each
         // code point.
 
@@ -395,8 +434,9 @@ impl App {
             .unwrap_or(cursor);
         let surrounding_text = &text[first_char_boundary..last_char_boundary];
         let relative_cursor = cursor - first_char_boundary;
+        let relative_anchor = anchor - first_char_boundary;
         let surrounding_text =
-            ImeSurroundingText::new(surrounding_text.into(), relative_cursor, relative_cursor)
+            ImeSurroundingText::new(surrounding_text.into(), relative_cursor, relative_anchor)
                 .expect("Bug in example: bad byte calculations");
 
         ImeRequestData::default()
