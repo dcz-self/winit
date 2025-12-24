@@ -97,4 +97,4 @@ web_sys = { package = "web-sys", version = "0.3.70" }
 
 [patch.crates-io]
 #sctk = { path="../client-toolkit", package = "smithay-client-toolkit", version = "0.20.0" }
-sctk = { git = "https://github.com/dcz-self/client-toolkit.git", branch = "actions", package = "smithay-client-toolkit", version = "0.20.0" }
+sctk = { git = "https://github.com/dcz-self/client-toolkit.git", branch = "filter", package = "smithay-client-toolkit", version = "0.20.0" }
