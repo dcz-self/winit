@@ -71,7 +71,7 @@ impl Dispatch<XxTextInputV3, TextInputData, WinitState> for TextInputState {
                 let window_id = crate::make_wid(&surface);
                 text_input_data.surface = Some(surface);
                 text_input_data.enable_count = Wrapping(0);
-
+                drop(text_input_data);
                 let mut window = match windows.get(&window_id) {
                     Some(window) => window.lock().unwrap(),
                     None => return,

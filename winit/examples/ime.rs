@@ -294,6 +294,22 @@ impl App {
                 }
                 info!("text input IME hint now {:?}", self.input_state.hint);
             },
+            Key::Character("n") if mods == ModifiersState::CONTROL => {
+                if self.input_state.ime_enabled {
+                    self.toggle_ime();
+                    // When simulating a switch, we pretend there's an infinite number of empty text fields, and we discard the one that we switch away from.
+                    self.input_state = TextInputState {
+                        ime_enabled: false,
+                        contents: Default::default(),
+                        purpose: ImePurpose::Normal,
+                        hint: ImeHint::NONE,
+                    };
+                    self.toggle_ime();
+                    info!("Executed a simulated switch to the next text field");
+                } else {
+                    info!("IME not enabled, doing nothing");
+                }
+            }
             Key::Named(NamedKey::Backspace) => {
                 self.input_state.backspace();
                 if self.input_state.ime_enabled {
@@ -493,6 +509,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 Use CTRL+i to toggle IME support.
 Use CTRL+p to cycle content purpose values.
 Use CTRL+h to cycle content hint permutations.
+Use CTRL+n to simulate switching to the next text field.
 "#
     );
 
