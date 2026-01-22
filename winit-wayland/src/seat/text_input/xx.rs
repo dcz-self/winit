@@ -1,4 +1,3 @@
-use std::num::Wrapping;
 use std::ops::Deref;
 
 use dpi::{LogicalPosition, LogicalSize};
@@ -70,7 +69,6 @@ impl Dispatch<XxTextInputV3, TextInputData, WinitState> for TextInputState {
             TextInputEvent::Enter { surface } => {
                 let window_id = crate::make_wid(&surface);
                 text_input_data.surface = Some(surface);
-                text_input_data.enable_count = Wrapping(0);
                 drop(text_input_data);
                 let mut window = match windows.get(&window_id) {
                     Some(window) => window.lock().unwrap(),
@@ -141,7 +139,7 @@ impl Dispatch<XxTextInputV3, TextInputData, WinitState> for TextInputState {
                     }
                 };
             },
-            TextInputEvent::Done { serial } => {
+            TextInputEvent::Done { .. } => {
                 let window_id = match text_input_data.surface.as_ref() {
                     Some(surface) => crate::make_wid(surface),
                     None => return,
@@ -154,12 +152,6 @@ impl Dispatch<XxTextInputV3, TextInputData, WinitState> for TextInputState {
                     }
                 };
 
-                // Make sure the event applies to the currently focused text field
-                if serial != text_input_data.enable_count.0 {
-                    warn!("Received a serial which doesn't match: {}, expected {}. Lag?", serial, text_input_data.enable_count.0);
-                    return;
-                }
-                
                 // The events are sent to the user individually, so
                 // CAUTION: events must always arrive in the order compatible with the application
                 // order specified by the text-input-v3 protocol:
@@ -276,13 +268,6 @@ impl TextInputExt for XxTextInputV3 {
         };
 
         if send_enable {
-            // This interior mutability is so implicit and therefore ugly.
-            // But I don't know how to improve it. The data must be writeable both by the application and Wayland callbacks. there are not many types available from both.
-            {
-                let data = self.data::<TextInputData>().unwrap();
-                let mut text_input_data = data.inner.lock().unwrap();
-                text_input_data.enable_count += 1;
-            }
             self.enable();
             if state.capabilities.move_cursor() {
                 self.announce_supported_features(SupportedFeatures::MoveCursor);
@@ -349,9 +334,6 @@ pub struct TextInputDataInner {
 
     /// Last preedit empty.
     last_preedit_empty: bool,
-    
-    /// Count of issued enable events since last enter
-    enable_count: Wrapping<u32>,
 }
 
 impl Default for TextInputDataInner {
@@ -364,7 +346,6 @@ impl Default for TextInputDataInner {
             pending_move: None,
             pending_action: None,
             last_preedit_empty: true,
-            enable_count: Wrapping(0),
         }
     }
 }
