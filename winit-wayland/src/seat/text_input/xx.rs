@@ -170,7 +170,7 @@ impl Dispatch<XxTextInputV3, TextInputData, WinitState> for TextInputState {
                 // TODO: perform the action
 
                 if let Some(DeleteSurroundingText { before, after }) =
-                    text_input_data.pending_delete
+                    text_input_data.pending_delete.take()
                 {
                     state.events_sink.push_window_event(
                         WindowEvent::Ime(Ime::DeleteSurrounding {
