@@ -183,9 +183,11 @@ impl ClientState {
     /// Updates the fields of the state which are present in update_fields.
     pub fn update(&mut self, request_data: ImeRequestData, scale_factor: f64) {
         if let Some((hint, purpose)) = request_data.hint_and_purpose {
-            self.content_type = (hint, purpose);
-        } else {
-            warn!("discarding IME hint and purpose update because capability is not enabled.");
+            if self.capabilities.hint_and_purpose() {
+                self.content_type = (hint, purpose);
+            } else {
+                warn!("discarding IME hint and purpose update because capability is not enabled.");
+            }
         }
 
         if let Some((position, size)) = request_data.cursor_area {

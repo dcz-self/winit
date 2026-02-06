@@ -223,7 +223,7 @@ impl Dispatch<XxTextInputV3, TextInputData, WinitState> for TextInputState {
                         window_id,
                     );
                 }
-                
+
                 if let Some(action) = text_input_data.pending_action.take() {
                     let action = match action {
                         Action::Finish => Some(ImeAction::Finish),
